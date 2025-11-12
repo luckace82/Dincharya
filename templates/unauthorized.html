@@ -63,6 +63,8 @@
             font-weight: 600;
             font-size: 16px;
             transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
         }
         
         .btn-primary {
@@ -84,6 +86,28 @@
         .btn-secondary:hover {
             background: #d5dbdb;
         }
+        
+        .logout-form {
+            display: inline;
+        }
+        
+        .logout-form button {
+            all: unset;
+            display: inline-block;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: background 0.2s;
+            background: #ecf0f1;
+            color: #333;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+        
+        .logout-form button:hover {
+            background: #d5dbdb;
+        }
     </style>
 </head>
 <body>
@@ -93,7 +117,10 @@
         <p>Sorry, you don't have permission to access this page. Please contact your supervisor if you believe this is an error.</p>
         <div class="actions">
             <a href="{% url 'dashboard' %}" class="btn btn-primary">Go to Dashboard</a>
-            <a href="{% url 'logout' %}" class="btn btn-secondary">Logout</a>
+            <form method="post" action="{% url 'logout' %}" class="logout-form">
+                {% csrf_token %}
+                <button type="submit">Logout</button>
+            </form>
         </div>
     </div>
 </body>

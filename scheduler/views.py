@@ -29,16 +29,14 @@ def manage_interns(request):
 
 
 def signup_view(request):
+    """
+    Sign up view for new interns.
+    Supervisors are created through the admin panel only.
+    """
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.save()
-            if user.role == 'intern':
-                selected_groups = form.cleaned_data.get('groups')
-                for group in selected_groups:
-                    user.groups.add(group)
-
+            user = form.save()  # Role is set to 'intern' in form.save()
             return redirect('login')
     else:
         form = SignUpForm()

@@ -44,6 +44,17 @@
         .header p {
             color: #666;
             font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .info-banner {
+            background: #d5f4e6;
+            border: 1px solid #2ecc71;
+            border-radius: 5px;
+            padding: 12px 15px;
+            color: #27ae60;
+            font-size: 13px;
+            margin-bottom: 20px;
         }
         
         .form-group {
@@ -169,7 +180,11 @@
     <div class="container">
         <div class="header">
             <h1>Dincharya</h1>
-            <p>Create Your Account</p>
+            <p>Intern Registration</p>
+        </div>
+        
+        <div class="info-banner">
+            ℹ️ Sign up as an Intern. Supervisors are managed through the admin panel.
         </div>
         
         <form method="post">
@@ -203,18 +218,6 @@
                 {% if form.email.errors %}
                     <ul class="error-list">
                         {% for error in form.email.errors %}
-                            <li>{{ error }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            </div>
-            
-            <div class="form-group">
-                <label for="{{ form.role.id_for_label }}">Role</label>
-                {{ form.role }}
-                {% if form.role.errors %}
-                    <ul class="error-list">
-                        {% for error in form.role.errors %}
                             <li>{{ error }}</li>
                         {% endfor %}
                     </ul>
@@ -271,7 +274,7 @@
                 {% endif %}
             </div>
             
-            <button type="submit" class="submit-btn">Create Account</button>
+            <button type="submit" class="submit-btn">Create Intern Account</button>
         </form>
         
         <div class="footer">
