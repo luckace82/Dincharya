@@ -9,11 +9,31 @@ from django.contrib.auth.models import Group
 
 @login_required
 def dashboard(request):
+    from tasks.models import Task
+    
     user = request.user
+    # Get the latest 5 tasks for the current user, ordered by due date
+    from django.utils import timezone
+    user_tasks = Task.objects.filter(assigned_to=user).order_by('due_date')[:5]
+    # Counts for the stats section
+    user_all_tasks_qs = Task.objects.filter(assigned_to=user)
+    tasks_assigned_count = user_all_tasks_qs.count()
+    tasks_completed_count = user_all_tasks_qs.filter(status='completed').count()
+    tasks_inprogress_count = user_all_tasks_qs.filter(status='in_progress').count()
+
+    context = {
+        'user': user,
+        'recent_tasks': user_tasks,
+        'now': timezone.now(),
+        'tasks_assigned_count': tasks_assigned_count,
+        'tasks_completed_count': tasks_completed_count,
+        'tasks_inprogress_count': tasks_inprogress_count,
+    }
+    
     if user.role == 'supervisor':
-        return render(request, 'supervisor_dashboard.html', {'user': user})
+        return render(request, 'supervisor_dashboard.html', context)
     elif user.role == 'intern':
-        return render(request, 'intern_dashboard.html', {'user': user})
+        return render(request, 'intern_dashboard.html', context)
     else:
         return render(request, 'unauthorized.html')
 
