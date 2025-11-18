@@ -28,3 +28,13 @@ class CustomUserAdmin(BaseUserAdmin):
 
 
 admin.site.register(CustomUser, CustomUserAdmin)
+
+from .models import SupportTicket
+
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ('id', 'subject', 'created_by', 'assigned_to', 'priority', 'status', 'created_at')
+    list_filter = ('status', 'priority', 'created_at')
+    search_fields = ('subject', 'description', 'created_by__username')
+    ordering = ('-created_at',)

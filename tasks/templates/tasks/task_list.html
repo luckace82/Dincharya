@@ -103,6 +103,14 @@
         </a>
     </div>
 
+    {% if request.GET.assigned_to or 'assigned_to_me' in request.GET %}
+    <div style="margin-bottom:12px;">
+        <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left-circle me-1"></i> Back to Dashboard
+        </a>
+    </div>
+    {% endif %}
+
     <!-- Filters -->
     <div class="card filter-card mb-4">
         <div class="card-body py-3">

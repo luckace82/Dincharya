@@ -1,16 +1,28 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render , redirect
+from django.shortcuts import render , redirect, get_object_or_404
 from .decorators import supervisor_required
 from django.http import HttpResponseForbidden
 from .models import CustomUser
 from .forms import SignUpForm
+from .forms import SupportTicketForm
+from .models import SupportTicket
 from django.contrib.auth.models import Group
+import csv
+from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, Q
+from django.db.models.functions import TruncWeek
+from django.utils import timezone
+from tasks.models import Task
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import UpdateView
+from django.views import View
+from django.contrib import messages
+from .forms import BulkReassignForm
 
 
 @login_required
 def dashboard(request):
-    from tasks.models import Task
-    
     user = request.user
     # Get the latest 5 tasks for the current user, ordered by due date
     from django.utils import timezone
@@ -31,11 +43,126 @@ def dashboard(request):
     }
     
     if user.role == 'supervisor':
+        interns = CustomUser.objects.filter(role='intern')
+        team_tasks = Task.objects.filter(assigned_to__in=interns)
+
+        summary = interns.annotate(
+            assigned_count=Count('assigned_tasks'),
+            completed_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='completed')),
+            inprogress_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='in_progress')),
+            overdue_count=Count('assigned_tasks', filter=Q(assigned_tasks__due_date__lt=timezone.now()))
+        )
+        context.update({
+            'team_summary': summary,
+            'team_overview': {
+                'total': team_tasks.count(),
+                'completed': team_tasks.filter(status='completed').count(),
+                'in_progress': team_tasks.filter(status='in_progress').count(),
+                'overdue': team_tasks.filter(due_date__lt=timezone.now()).count(),
+            }
+        })
+        # Supervisor-level aggregates
+        interns_count = interns.count()
+        from django.contrib.auth.models import Group
+        groups_count = Group.objects.count()
+        total_tasks = team_tasks.count()
+        completed = team_tasks.filter(status='completed').count()
+        completion_rate = round((completed / total_tasks) * 100, 1) if total_tasks else 0
+
+        context.update({
+            'interns_count': interns_count,
+            'groups_count': groups_count,
+            'completion_rate': completion_rate,
+        })
+        # Recent support tickets for supervisors
+        recent_tickets = SupportTicket.objects.filter(status__in=['open', 'in_progress']).select_related('created_by')[:5]
+        open_tickets_count = SupportTicket.objects.filter(status='open').count()
+        context.update({
+            'recent_tickets': recent_tickets,
+            'open_tickets_count': open_tickets_count,
+        })
         return render(request, 'supervisor_dashboard.html', context)
     elif user.role == 'intern':
         return render(request, 'intern_dashboard.html', context)
     else:
         return render(request, 'unauthorized.html')
+
+
+@login_required
+@supervisor_required
+def export_team_summary_csv(request):
+    """Export a CSV with per-intern task summary."""
+    interns = CustomUser.objects.filter(role='intern')
+    summary = interns.annotate(
+        assigned_count=Count('assigned_tasks'),
+        completed_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='completed')),
+        inprogress_count=Count('assigned_tasks', filter=Q(assigned_tasks__status='in_progress')),
+        overdue_count=Count('assigned_tasks', filter=Q(assigned_tasks__due_date__lt=timezone.now()))
+    )
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="team_summary.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Intern ID', 'Username', 'Name', 'Assigned', 'In Progress', 'Completed', 'Overdue', 'Completion %'])
+
+    for intern in summary:
+        total = intern.assigned_count or 0
+        completed = intern.completed_count or 0
+        completion_pct = round((completed / total) * 100, 1) if total else 0
+        # get_full_name may not exist on custom user; guard
+        name = getattr(intern, 'get_full_name', None)
+        if callable(name):
+            display_name = intern.get_full_name() or intern.username
+        else:
+            display_name = getattr(intern, 'first_name', '') or intern.username
+
+        writer.writerow([
+            intern.id,
+            intern.username,
+            display_name,
+            total,
+            intern.inprogress_count or 0,
+            completed,
+            intern.overdue_count or 0,
+            completion_pct,
+        ])
+
+    return response
+
+
+@login_required
+@supervisor_required
+def tasks_time_series(request):
+    """Return JSON series for tasks created and completed per week (last 12 weeks)."""
+    end = timezone.now()
+    start = end - timezone.timedelta(weeks=12)
+
+    created_qs = Task.objects.filter(created_at__gte=start)
+    created = created_qs.annotate(week=TruncWeek('created_at')).values('week').annotate(count=Count('id')).order_by('week')
+
+    completed_qs = Task.objects.filter(updated_at__gte=start, status='completed')
+    completed = completed_qs.annotate(week=TruncWeek('updated_at')).values('week').annotate(count=Count('id')).order_by('week')
+
+    data = {}
+    for row in created:
+        key = row['week'].date().isoformat()
+        data.setdefault(key, {})['created'] = row['count']
+    for row in completed:
+        key = row['week'].date().isoformat()
+        data.setdefault(key, {})['completed'] = row['count']
+
+    # ensure all weeks present
+    series = []
+    # Build list of weeks between start and end by week start
+    cur = start - timezone.timedelta(days=start.weekday())
+    while cur <= end:
+        key = cur.date().isoformat()
+        vals = data.get(key, {})
+        series.append({'week': key, 'created': vals.get('created', 0), 'completed': vals.get('completed', 0)})
+        cur = cur + timezone.timedelta(weeks=1)
+
+    return JsonResponse(series, safe=False)
 
 
 
@@ -62,3 +189,84 @@ def signup_view(request):
         form = SignUpForm()
 
     return render(request, 'signup.html', {'form': form})
+
+
+class SupervisorOrOwnerMixin:
+    def dispatch(self, request, *args, **kwargs):
+        obj = self.get_object() if hasattr(self, 'get_object') else None
+        if request.user.role == 'supervisor':
+            return super().dispatch(request, *args, **kwargs)
+        # Fallback: owner/assignee only
+        if obj and (obj.created_by == request.user or obj.assigned_to == request.user):
+            return super().dispatch(request, *args, **kwargs)
+        raise PermissionDenied
+
+
+class TaskUpdateView(LoginRequiredMixin, SupervisorOrOwnerMixin, UpdateView):
+    ...
+
+
+class BulkReassignView(LoginRequiredMixin, View):
+    def get(self, request):
+        form = BulkReassignForm(user=request.user)
+        return render(request, 'tasks/bulk_reassign.html', {'form': form})
+    def post(self, request):
+        form = BulkReassignForm(request.POST)
+        if form.is_valid():
+            task_ids = form.cleaned_data['task_ids']  # list of ids
+            new_user = form.cleaned_data['assigned_to']
+            # Iterate and save each task so history and save logic run
+            qs = Task.objects.filter(id__in=[t.id for t in task_ids])
+            for task in qs:
+                task.assigned_to = new_user
+                task.delegated_by = request.user
+                task._current_user = request.user
+                task.save()
+            messages.success(request, 'Tasks reassigned.')
+            return redirect('tasks:task_list')
+        return render(request, 'tasks/bulk_reassign.html', {'form': form})
+
+
+@login_required
+@supervisor_required
+def approve_task(request, pk):
+    task = get_object_or_404(Task, pk=pk)
+    task.approved = True
+    task.current_user = request.user
+    task.save()
+    messages.success(request, 'Task approved.')
+    return redirect('tasks:task_list')
+
+
+@login_required
+@supervisor_required
+def reports_page(request):
+    """Render the reports page which contains CSV export and the full chart.
+    The chart data is fetched from the existing `tasks_time_series` JSON endpoint.
+    """
+    # Minimal context; the template will fetch timeseries data and call export URL
+    return render(request, 'reports.html', {})
+
+
+@login_required
+def support_ticket_create(request):
+    """Allow interns (and supervisors) to create support tickets."""
+    if request.method == 'POST':
+        form = SupportTicketForm(request.POST)
+        if form.is_valid():
+            ticket = form.save(commit=False)
+            ticket.created_by = request.user
+            ticket.save()
+            messages.success(request, 'Support ticket submitted. Your supervisor will be notified.')
+            return redirect('dashboard')
+    else:
+        form = SupportTicketForm()
+    return render(request, 'support/create_ticket.html', {'form': form})
+
+
+@login_required
+@supervisor_required
+def support_ticket_list(request):
+    """Supervisor view: list recent tickets."""
+    tickets = SupportTicket.objects.all().select_related('created_by', 'assigned_to')[:50]
+    return render(request, 'support/ticket_list.html', {'tickets': tickets})

@@ -362,6 +362,30 @@
             margin-right: 15px;
             font-size: 18px;
         }
+
+        /* Floating support button */
+        .support-float {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #fff;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 8px 24px rgba(4, 120, 87, 0.2);
+            z-index: 1200;
+            text-decoration: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .support-float:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(4,120,87,0.25);
+        }
     </style>
 </head>
 <body>
@@ -483,7 +507,7 @@
 
 
         <div class="quick-actions">
-            <a href="{% url 'tasks:task_list' %}?assigned_to_me=1" class="action-card" aria-label="My Tasks">
+            {% comment %} <a href="{% url 'tasks:task_list' %}?assigned_to_me=1" class="action-card" aria-label="My Tasks">
                 <div class="action-icon">📋</div>
                 <h3>My Tasks</h3>
                 <p>View and manage your assigned tasks</p>
@@ -501,27 +525,14 @@
                 <div class="action-icon">📚</div>
                 <h3>Resources</h3>
                 <p>Access learning materials and docs</p>
-            </a>
+            </a> {% endcomment %}
             
-            <!-- Replace the href below with your support/contact URL when available -->
-            <a href="#support" class="action-card" aria-label="Support">
-                <div class="action-icon">💬</div>
-                <h3>Support</h3>
-                <p>Get help from your supervisor</p>
-            </a>
-        </div>
-        
-        <div class="info-section">
-            <h3>Getting Started</h3>
-            <ul class="info-list">
-                <li>Complete your profile information</li>
-                <li>Review your assigned tasks and deadlines</li>
-                <li>Track your progress and completion status</li>
-                <li>Communicate with your supervisor</li>
-                <li>Access learning resources and documentation</li>
-                <li>Submit work for review and feedback</li>
-            </ul>
+            <!-- Support is now available via the floating support icon (bottom-right) -->
         </div>
     </div>
+    <!-- Floating Support Button -->
+    <a href="{% url 'support_create' %}" class="support-float" aria-label="Support" title="Support">
+        💬
+    </a>
 </body>
 </html>

@@ -216,6 +216,38 @@
             margin-right: 15px;
             font-size: 18px;
         }
+        /* Floating support button (supervisor) */
+        .support-float {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #fff;
+            background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+            box-shadow: 0 8px 24px rgba(249, 115, 22, 0.18);
+            z-index: 1200;
+            text-decoration: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .support-float:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(249,115,22,0.22); }
+        .support-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #ef4444;
+            color: #fff;
+            border-radius: 999px;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        }
     </style>
 </head>
 <body>
@@ -230,12 +262,7 @@
         </div>
     </div>
     
-    <div class="container">
-        <div class="welcome-section">
-            <h2>Welcome back, Supervisor! 👋</h2>
-            <p>Manage your interns and track their progress</p>
-        </div>
-        
+    <div class="container">  
         <div class="quick-actions">
             <a href="{% url 'manage_interns' %}" class="action-card">
                 <div class="action-icon">👥</div>
@@ -244,12 +271,14 @@
                 <div class="action-btn">Go to Interns</div>
             </a>
             
-            <div class="action-card">
+            <a href="{% url 'reports' %}" class="action-card">
                 <div class="action-icon">📊</div>
                 <h3>Reports</h3>
                 <p>View performance reports and analytics</p>
-                <div class="action-btn" style="cursor: not-allowed; opacity: 0.6;">Coming Soon</div>
-            </div>
+                <div style="margin-top:12px;">
+                    <div class="action-btn">View Reports</div>
+                </div>
+            </a>
             
             <div class="action-card">
                 <div class="action-icon">⚙️</div>
@@ -261,34 +290,91 @@
         
         <div class="stats-section">
             <div class="stat-card">
-                <div class="stat-number">—</div>
+                <div class="stat-number">{{ interns_count|default:'0' }}</div>
                 <div class="stat-label">Total Interns</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">—</div>
+                <div class="stat-number">{{ team_overview.in_progress|default:'0' }}</div>
                 <div class="stat-label">Active Tasks</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">—</div>
+                <div class="stat-number">{{ completion_rate|default:'0' }}%</div>
                 <div class="stat-label">Completion Rate</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">—</div>
+                <div class="stat-number">{{ groups_count|default:'0' }}</div>
                 <div class="stat-label">Total Groups</div>
             </div>
         </div>
-        
-        <div class="info-section">
-            <h3>Supervisor Features</h3>
-            <ul class="info-list">
-                <li>View and manage all registered interns in the system</li>
-                <li>Assign interns to groups and departments</li>
-                <li>Track intern progress and performance</li>
-                <li>Generate reports and analytics</li>
-                <li>Manage user roles and permissions</li>
-                <li>Configure system settings and preferences</li>
+
+        <!-- Support tickets card -->
+        <div class="info-section mt-3">
+            <h3>Support Tickets <small style="color:#666; font-size:13px;">({{ open_tickets_count|default:'0' }} open)</small></h3>
+            <ul class="info-list" style="margin-top:8px;">
+                {% for t in recent_tickets %}
+                <li style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1;">
+                        <strong>{{ t.subject|truncatechars:60 }}</strong>
+                        <div style="color:#777; font-size:13px; margin-top:6px;">
+                            Submitted by {{ t.created_by.get_full_name|default:t.created_by.username }} • {{ t.created_at|timesince }} ago • {{ t.get_priority_display }}
+                        </div>
+                    </div>
+                    <div style="margin-left:12px;">
+                        <a href="{% url 'support_list' %}" class="action-btn">View all</a>
+                    </div>
+                </li>
+                {% empty %}
+                <li>No recent tickets.</li>
+                {% endfor %}
             </ul>
         </div>
+
+        <!-- Per-intern breakdown -->
+        <div class="info-section mt-3">
+            <h3>Team Members</h3>
+            <div style="overflow:auto;">
+                <table style="width:100%; border-collapse: collapse; margin-top: 12px;">
+                    <thead>
+                        <tr style="text-align:left; border-bottom: 1px solid #e6e6e6;">
+                            <th style="padding:8px">Intern</th>
+                            <th style="padding:8px">Assigned</th>
+                            <th style="padding:8px">In Progress</th>
+                            <th style="padding:8px">Completed</th>
+                            <th style="padding:8px">Overdue</th>
+                            <th style="padding:8px">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for intern in team_summary %}
+                        <tr style="border-bottom: 1px solid #f0f0f0;">
+                            <td style="padding:8px">{{ intern.get_full_name|default:intern.username }}</td>
+                            <td style="padding:8px">{{ intern.assigned_count|default:'0' }}</td>
+                            <td style="padding:8px">{{ intern.inprogress_count|default:'0' }}</td>
+                            <td style="padding:8px">{{ intern.completed_count|default:'0' }}</td>
+                            <td style="padding:8px">{{ intern.overdue_count|default:'0' }}</td>
+                            <td style="padding:8px">
+                                <a href="{% url 'tasks:task_list' %}?assigned_to={{ intern.id }}" class="action-btn">View Tasks</a>
+                                <a href="{% url 'bulk_reassign' %}?assigned_to={{ intern.id }}" class="action-btn" style="margin-left:8px; background:#10b981">Reassign</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" style="padding:12px; text-align:center; color:#777">No interns found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
+    <!-- Floating support button for supervisors -->
+    <a href="{% url 'support_list' %}" class="support-float" aria-label="Support" title="Support tickets">
+        <span style="position:relative; display:inline-block;">💬
+            {% if open_tickets_count and open_tickets_count|int > 0 %}
+            <span class="support-badge">{{ open_tickets_count }}</span>
+            {% endif %}
+        </span>
+    </a>
 </body>
 </html>

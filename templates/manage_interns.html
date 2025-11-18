@@ -232,7 +232,11 @@
             <h2>Manage Interns</h2>
             <p>Overview and manage all registered interns in the system</p>
         </div>
-        
+
+        <div style="display:flex; gap:12px; align-items:center; margin:12px 0 18px 0;">
+            <a href="{% url 'dashboard' %}" class="action-btn" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; padding:10px 16px; border-radius:6px; text-decoration:none; font-weight:600">Back to Dashboard</a>
+        </div>
+
         {% if interns %}
             <div class="stats">
                 <div class="stat-card">

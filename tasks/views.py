@@ -14,25 +14,43 @@ class TaskListView(LoginRequiredMixin, ListView):
     template_name = 'tasks/task_list.html'
     context_object_name = 'tasks'
     paginate_by = 10
+    
+    
 
     def get_queryset(self):
-        # Start with tasks assigned to the current user
-        queryset = Task.objects.filter(assigned_to=self.request.user)
+        # Allow supervisors/superusers to filter by a specific assigned user via GET param
+        assigned_user = self.request.GET.get('assigned_to')
+        role = getattr(self.request.user, 'role', None)
         
+
+        queryset = None
+        if assigned_user and (self.request.user.is_superuser or role == 'supervisor'):
+            try:
+                assigned_id = int(assigned_user)
+                queryset = Task.objects.filter(assigned_to__id=assigned_id)
+            except (ValueError, TypeError):
+                queryset = Task.objects.none()
+
+        # If no explicit assigned filter, decide default scope
+        if queryset is None:
+            # If the user requested only their assigned tasks
+            if 'assigned_to_me' in self.request.GET:
+                queryset = Task.objects.filter(assigned_to=self.request.user)
+            else:
+                # Superusers see all tasks by default, supervisors and interns see their assigned tasks
+                if self.request.user.is_superuser:
+                    queryset = Task.objects.all()
+                else:
+                    queryset = Task.objects.filter(assigned_to=self.request.user)
+
         # Filter by status if provided
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
-            
-        # If 'assigned_to_me' is not checked, show all tasks (for admin/superuser)
-        if 'assigned_to_me' not in self.request.GET and self.request.user.is_superuser:
-            queryset = Task.objects.all()
-            if status:
-                queryset = queryset.filter(status=status)
-            
-        # Order by priority and due date
+
+        # Order by due date then priority
         queryset = queryset.order_by('due_date', '-priority')
-        
+
         return queryset
     
     def get_context_data(self, **kwargs):
