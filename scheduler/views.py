@@ -6,6 +6,12 @@ from .models import CustomUser
 from .forms import SignUpForm
 from .forms import SupportTicketForm
 from .models import SupportTicket
+from .forms import SupportReplyForm
+from .models import SupportReply
+from django.core.mail import send_mail
+from django.conf import settings
+import logging
+logger = logging.getLogger(__name__)
 from django.contrib.auth.models import Group
 import csv
 from django.http import HttpResponse, JsonResponse
@@ -83,6 +89,11 @@ def dashboard(request):
         })
         return render(request, 'supervisor_dashboard.html', context)
     elif user.role == 'intern':
+        # Provide intern's own tickets to their dashboard
+        my_tickets = SupportTicket.objects.filter(created_by=user).select_related('assigned_to').prefetch_related('replies__responder')[:5]
+        context.update({
+            'my_tickets': my_tickets,
+        })
         return render(request, 'intern_dashboard.html', context)
     else:
         return render(request, 'unauthorized.html')
@@ -270,3 +281,63 @@ def support_ticket_list(request):
     """Supervisor view: list recent tickets."""
     tickets = SupportTicket.objects.all().select_related('created_by', 'assigned_to')[:50]
     return render(request, 'support/ticket_list.html', {'tickets': tickets})
+
+
+@login_required
+def support_ticket_detail(request, pk):
+    """View a ticket. Supervisors can post replies; ticket owners (interns) can view the ticket and replies.
+    Posting is restricted to supervisors to keep replies authoritative.
+    """
+    ticket = get_object_or_404(SupportTicket, pk=pk)
+
+    # Permission: allow if supervisor or ticket owner
+    is_supervisor = request.user.is_superuser or getattr(request.user, 'role', None) == 'supervisor'
+    if not (is_supervisor or ticket.created_by == request.user):
+        return HttpResponseForbidden("You don't have permission to view this ticket.")
+
+    # Load replies defensively
+    try:
+        replies = list(ticket.replies.select_related('responder').all())
+    except Exception as exc:
+        logger.exception('Failed to load replies for ticket %s', pk)
+        messages.error(request, 'Failed to load ticket replies (see server logs).')
+        replies = []
+
+    # Only supervisors may POST replies
+    if request.method == 'POST':
+        if not is_supervisor:
+            return HttpResponseForbidden("Only supervisors can post replies.")
+        form = SupportReplyForm(request.POST)
+        if form.is_valid():
+            reply = form.save(commit=False)
+            reply.ticket = ticket
+            reply.responder = request.user
+            reply.save()
+
+            # Send email notification to ticket owner if they have an email
+            recipient_email = getattr(ticket.created_by, 'email', None)
+            if recipient_email:
+                subject = f"Response to your support ticket #{ticket.id}: {ticket.subject}"
+                body = (
+                    f"Hello {ticket.created_by.get_full_name() or ticket.created_by.username},\n\n"
+                    f"A supervisor has replied to your support ticket:\n\n{reply.message}\n\n"
+                    "--\nDincharya Support Team"
+                )
+                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+                try:
+                    send_mail(subject, body, from_email, [recipient_email], fail_silently=True)
+                except Exception:
+                    logger.exception('Failed to send support reply email for ticket %s', ticket.pk)
+
+            messages.success(request, 'Reply posted and intern notified.')
+            return redirect('support_detail', pk=ticket.pk)
+    else:
+        # Show empty form only to supervisors
+        form = SupportReplyForm() if is_supervisor else None
+
+    return render(request, 'support/ticket_detail.html', {
+        'ticket': ticket,
+        'replies': replies,
+        'form': form,
+        'is_supervisor': is_supervisor,
+    })

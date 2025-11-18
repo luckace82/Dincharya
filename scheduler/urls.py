@@ -15,4 +15,5 @@ urlpatterns = [
     path('reports/', views.reports_page, name='reports'),
     path('support/new/', views.support_ticket_create, name='support_create'),
     path('support/', views.support_ticket_list, name='support_list'),
+    path('support/<int:pk>/', views.support_ticket_detail, name='support_detail'),
 ]

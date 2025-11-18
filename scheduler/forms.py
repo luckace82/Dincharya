@@ -3,6 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import Group
 from .models import CustomUser
 from .models import SupportTicket
+from .models import SupportReply
 
 from django.contrib.auth import get_user_model
 from tasks.models import Task
@@ -66,4 +67,13 @@ class SupportTicketForm(forms.ModelForm):
             'subject': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Short description of the issue'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 6, 'placeholder': 'Describe the issue and steps to reproduce'}),
             'priority': forms.Select(attrs={'class': 'form-select'})
+        }
+
+
+class SupportReplyForm(forms.ModelForm):
+    class Meta:
+        model = SupportReply
+        fields = ['message']
+        widgets = {
+            'message': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Write your reply and suggested solutions here'})
         }

@@ -371,7 +371,7 @@
     <!-- Floating support button for supervisors -->
     <a href="{% url 'support_list' %}" class="support-float" aria-label="Support" title="Support tickets">
         <span style="position:relative; display:inline-block;">💬
-            {% if open_tickets_count and open_tickets_count|int > 0 %}
+            {% if open_tickets_count and open_tickets_count > 0 %}
             <span class="support-badge">{{ open_tickets_count }}</span>
             {% endif %}
         </span>

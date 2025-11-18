@@ -37,3 +37,17 @@ class SupportTicket(models.Model):
 
     def __str__(self):
         return f"#{self.id} {self.subject} ({self.get_status_display()})"
+
+
+class SupportReply(models.Model):
+    """Supervisor replies to support tickets."""
+    ticket = models.ForeignKey(SupportTicket, related_name='replies', on_delete=models.CASCADE)
+    responder = models.ForeignKey(CustomUser, related_name='support_replies', on_delete=models.CASCADE)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Reply #{self.id} to Ticket #{self.ticket.id}"
