@@ -31,6 +31,10 @@ class SupportTicket(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # When True the supervisor should follow up further (system-generated)
+    follow_up_required = models.BooleanField(default=False)
+    # Optional system-generated or manual follow-up note to help supervisors
+    follow_up_note = models.TextField(blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']

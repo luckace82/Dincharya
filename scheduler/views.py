@@ -329,6 +329,33 @@ def support_ticket_detail(request, pk):
                 except Exception:
                     logger.exception('Failed to send support reply email for ticket %s', ticket.pk)
 
+            # Analyze reply to determine if a concrete solution was provided.
+            # If a solution keyword is present, mark ticket as resolved so it
+            # moves out of the open queue. Otherwise, set a follow-up flag and
+            # generate a short follow-up note so supervisors can easily see it.
+            msg_text = (reply.message or '').lower()
+            solution_keywords = ['fix', 'fixed', 'resolve', 'resolved', 'solution', 'patched', 'workaround', 'done', 'implemented', 'completed']
+            provided_solution = any(k in msg_text for k in solution_keywords)
+
+            if provided_solution:
+                ticket.status = 'resolved'
+                ticket.follow_up_required = False
+                ticket.follow_up_note = ''
+            else:
+                ticket.follow_up_required = True
+                # Generate a concise follow-up note highlighting potential effects
+                ticket.follow_up_note = (
+                    "No clear solution provided in supervisor reply. Potential effects:\n"
+                    "1) Blocked intern progress\n"
+                    "2) Incorrect or incomplete results\n"
+                    "3) Possible data inconsistency or loss depending on context\n\n"
+                    "Please follow up with a proposed remediation or mark the ticket as resolved when fixed."
+                )
+
+            # Update ticket timestamp and save
+            ticket.updated_at = timezone.now()
+            ticket.save()
+
             messages.success(request, 'Reply posted and intern notified.')
             return redirect('support_detail', pk=ticket.pk)
     else:
